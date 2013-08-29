@@ -1,1 +1,8 @@
 /bin-debug
+/.settings
+/html-template
+/.actionScriptProperties
+/.gitignore
+/.project
+*.swp
+*.swa
