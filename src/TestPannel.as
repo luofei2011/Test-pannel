@@ -8,76 +8,103 @@ package
 	
 	public class TestPannel extends Sprite
 	{
-		private var _graphicContainer:Sprite;
-		private var _test:Array = [];
-		private var _max_y:Number; // 数据极差
-		private var _min:Number; // 数据最小值
-		private var _avg:int; // 数据平均值
-		private var _line:Sprite;
-		private var _bottom:int; // 图标底线坐标
-		private var _prevNum:int = 1; // x轴分组间隔, 单位(s)
+		private var _colorArr:Array = [0xA5BC4E, 0xE48701, 0x074f85, 0x1ab20a, 0xe9f707];
+		private var _data:Array = [];
+		private var _prevNum:int = 1; // 前一次显示的最优解
 		
-		private var _max_show_num:int = 11; // x轴最大的显示数据项
+		// 控制常量
+		private var _container_width:int = 515;
+		private var _container_height:int = 160;
+		private var _max_show_num:int = 11;
 		
 		public function TestPannel()
 		{
 			stage.scaleMode = StageScaleMode.NO_SCALE;
-			_line = new Sprite();
-			_graphicContainer = new Sprite();
+			
+			for (var i:uint = 0; i < 5; i++) {
+				_data[i] = [];
+			}
 			
 			var _timer:Timer = new Timer(3000);
 			_timer.addEventListener(TimerEvent.TIMER, function():void {
-//				_test = [];
-//				var _len:int = Math.random() * 300; 
-//				for (var i:uint = 0; i < _len; i++) {
-				_test.push({
-					delay: Math.random() * 1500,
-					date: new Date()
-				}); 
-//				}
-				flushDisplay();
+				for (var i:uint = 0; i < 5; i++) {
+					_data[i].push({
+						delay: Math.random() * 1500,
+						date: new Date()
+					});
+				}
+//				trace(_data[0][0].delay, _data[1][0].delay,_data[2][0].delay,_data[3][0].delay,_data[4][0].delay);
+				init();
 			});
 			_timer.start();
 		}
 		
-		private function flushDisplay():void {
+		private function init():void {
 			removeChildren();
-			drawYpos();
-			drawXpos();
+			// 处理源数据，得到最小值、最大值、以及平均值
+			var msg:Object = dealArray(_data);
+			
+			// 画Y坐标轴
+			drawYCoord();
+			// 画标尺
+			drawRuler(msg);
+			// 画X坐标轴
+			drawXCoord(msg);
+			// 画结果曲线
+			drawCvsLines(msg);
 		}
 		
-		private function drawYpos():void {
-			var _row:int = calcGraphicRow(_test);
-			var _rows:int = Math.floor(160 / _row);
-			var _dYpos:int = 160 - _rows * _row; // 修正误差
-			var _labelName:int;
-			_graphicContainer.removeChildren();
+		private function drawRuler(msg:Object):void {
+			// 处理源数据，计算相对标准差并返回合适的数据分组
+			var lines:int = getLines(msg);
+			// 得到分组坐标值间隔
+			var space:Number = _container_height / lines;
+			// 得到数据源的极差
+			var rang:Number = msg.max - msg.min;
 			
-			for (var i:uint = 0; i < _row; i++) {
-				var _signal1:Sprite = drawSignalLine((_rows - 1) / 2);
-				var _signal2:Sprite = drawSignalLine((_rows - 1) / 2);
-				_labelName = _min + (_row - i) * (_max_y / _row);
+			for (var i:uint = 0; i < lines + 1; i++) {
+				var _l:Sprite = new Sprite();
+				var _m:Sprite = new Sprite();
+				var _txt:TextField = new TextField();
+				var _label:int;
+				_l.graphics.clear();
+				_l.graphics.lineStyle(1, 0xEEEEEE);
+				_l.graphics.moveTo(-8, i * space);
+				_l.graphics.lineTo(_container_width, i * space);
+				_l.graphics.endFill();
 				
-				_signal1.y = _dYpos + (_rows - 1) * i;
-				_signal2.y = _signal1.y + (_rows - 1) / 2;
+				_label =  msg.min + (lines - i) * (rang / lines);
 				
-				_graphicContainer.addChild(_signal1);
-				_graphicContainer.addChild(_signal2);
+				_txt.text = _label + "";
+				_txt.x = -_txt.textWidth - 10;
+				_txt.y = i * space - _txt.textHeight / 2 - 2;
 				
-				drawLine(_signal1.y, _labelName);
-				
-				if (i == _row - 1) {
-					_bottom = _signal2.y + _signal2.height;
-					drawLine(_bottom, _min);
+				// 分割白线
+				if (i) {
+					_m.graphics.clear();
+					_m.graphics.lineStyle(1, 0xFFFFFF);
+					_m.graphics.moveTo(0, (i - 0.5) * space);
+					_m.graphics.lineTo(8, (i - 0.5) * space);
+					_m.graphics.endFill();
+					
+					addChild(_m);
 				}
 				
+				addChild(_txt);
+				addChild(_l);
 			}
-			addChild(_graphicContainer);
 		}
 		
-        /*
-         * 根据当前的事件间隔，递归找到合适的显示数据的分组
-         * */
+		private function drawYCoord():void {
+			var _container:Sprite = new Sprite();
+			_container.graphics.clear();
+			_container.graphics.beginFill(0x57CCDD);
+			_container.graphics.drawRect(0, 0, 8, _container_height);
+			_container.graphics.endFill();
+			
+			addChild(_container);
+		}
+		
 		private function getPropertyGroup(d:uint):uint {
 			while ((d / _prevNum) > _max_show_num) {
 				_prevNum += 1;
@@ -85,26 +112,12 @@ package
 			return d / _prevNum;
 		}
 		
-		private function drawXpos():void {
-			var arr:Array = _test;
-			var _long:int = 500;
-			if (!arr.length)
-				return;
-			var _num:int = _test.length;
-			
-			if (_num > 200) {
-				arr = _test.slice(_test.length - 200);
-				_num = arr.length;
-			}
-			
-            // 当前组数据的时间间隔
-			var _dTime:uint = (arr[_num - 1].date.time - arr[0].date.time) / 1000;
-			var _len:uint = getPropertyGroup(_dTime) + 1;
-			var _diff:int = _long / (_len - 1);
-			
-			var _startHours:int = parseInt(arr[0].date.getHours() + "");
-			var _startMinutes:int = parseInt(arr[0].date.getMinutes() + "");
-			var _startSeconds:int = parseInt(arr[0].date.getSeconds() + "");
+		private function drawXCoord(obj:Object):void {
+			var _len:int = getPropertyGroup(obj.dltTime);
+			var _startHours:int = parseInt(obj.srcData[0].date.getHours() + "");
+			var _startMinutes:int = parseInt(obj.srcData[0].date.getMinutes() + "");
+			var _startSeconds:int = parseInt(obj.srcData[0].date.getSeconds() + "");
+			var _diff:Number = _container_width / _len;
 			
 			for (var i:uint = 0; i < _len; i++) {
 				var _con:Sprite = new Sprite();
@@ -113,8 +126,8 @@ package
 				var _time:String;
 				_con.graphics.clear();
 				_con.graphics.lineStyle(1, 0xBBCCDD);
-				_con.graphics.moveTo(_x, _bottom);
-				_con.graphics.lineTo(_x, _bottom + 8);
+				_con.graphics.moveTo(_x, _container_height);
+				_con.graphics.lineTo(_x, _container_height + 8);
 				_con.graphics.endFill();
 				addChild(_con);
 				
@@ -138,108 +151,105 @@ package
 				}
 				
 				_txt.text = _time;
-				_txt.y = _bottom + 8;
+				_txt.y = _container_height + 8;
 				_txt.x = _x - _txt.textWidth / 2 - 1;
 				addChild(_txt);
 			}
-			
-			for (i = 0; i < _num; i++) {
-				var _xpos:int = 500 * (arr[i].date.time - arr[0].date.time) / (_dTime * 1000) + 13;
-
-				if (!i) {
-					_line.graphics.clear();
-					_line.graphics.lineStyle(1, 0xA5BC4E);
-					_line.graphics.moveTo(_xpos, calcTruelyY(arr[i].delay));
-				}
-				_line.graphics.lineTo(_xpos, calcTruelyY(arr[i].delay));
-				_line.graphics.endFill();
-			}
-			addChild(_line);
 		}
-		
-        /*
-         * @method 返回数据点在折线图中的真实Y轴坐标
-         * @param {Number} y 数据源的真实值
-         * @return {Number} 得到计算后的实际坐标
-         * */
-		private function calcTruelyY(y:Number):Number {
-			return _graphicContainer.height  - _graphicContainer.height * (y - _min) / _max_y;
-		}
-		
-		private function drawLine(y:int, value:int):void {
-			var _xline:Sprite = new Sprite();
-			var _label:Sprite = new Sprite();
-			var _txt:TextField = new TextField();
-			_xline.graphics.clear();
-			_xline.graphics.lineStyle(1, 0xEEEEEE);
-			_xline.graphics.moveTo(8, y);
-			_xline.graphics.lineTo(8 + 515, y);
-			_xline.graphics.endFill();
 			
-			_label.graphics.clear();
-			_label.graphics.lineStyle(1, 0xEEEEEE);
-			_label.graphics.moveTo(0, y);
-			_label.graphics.lineTo(-8, y);
-			_label.graphics.endFill();
+		private function drawCvsLines(obj:Object):void {
+			var _tmp:Array = [];
+			var _len:int = _data.length;
+			var _idx:uint = 0;
+			var _xpos:Number;
+			var _ypos:Number;
 			
-			_txt.text = value + "";
-			_txt.x = -_txt.textWidth - 10;
-			_txt.y = y - _txt.textHeight / 2;
-			
-			addChild(_txt);
-			addChild(_label);
-			addChild(_xline);
-		}
-		
-		private function drawSignalLine(h:int):Sprite {
-			var _con:Sprite = new Sprite();
-			_con.graphics.clear();
-			_con.graphics.beginFill(0x57CCDD);
-			_con.graphics.drawRect(0, 0, 8, h);
-			_con.graphics.endFill();
-			
-			return _con;
-		}
-		
-        /*
-         * @method 计算数据内信息的平均值，最大值，最小值，极差等
-         * @param {arr} arr 数据源
-         * @return {Number} 返回平均值
-         * */
-		private function average(arr:Array):Number {
-			var _sum:Number = 0;
-			var _max:Number = 0;
-			_min = 0;
-			for (var i:uint = 0; i < arr.length; i++) {
-				_sum += arr[i].delay;
+			for (; _idx < _len; _idx++) {
+				_tmp = _data[_idx];
+				var _l:Sprite = new Sprite();
 				
-				if (arr[i].delay > _max)
-					_max = arr[i].delay;
-				if (arr[i].delay < _min)
-					_min = arr[i].delay;
+				for (var i:uint = 0; i < _tmp.length; i++) {
+					_xpos = (_container_width - 13) * (_tmp[i].date.time - _data[0][0].date.time) / (obj.dltTime * 1000) + 13;
+					_ypos = calcTruelyY(obj, _tmp[i].delay);
+					if (!i) {
+						_l.graphics.clear();
+						_l.graphics.lineStyle(1, _colorArr[_idx]);
+						_l.graphics.moveTo(_xpos, _ypos);
+					} else {
+						_l.graphics.lineTo(_xpos, _ypos);
+					}
+				}
+				_l.graphics.endFill();
+				addChild(_l);
 			}
-			_max_y = _max - _min;
-			_avg = _sum / arr.length;
-			
-			return _avg;
 		}
 		
-        /*
-         * @method 计算当前组数据的相对标准差
-         * @param {Array} arr 数据源
-         * @return {int} 根据当前组数据的相对标准差来决定图标的纵坐标分组
-         *
-         * 注：根据一组数据的相对标准差动态决定数据的纵向分组,
-         *     这里根据差值的0-1决定分组的4-8
-         * */
-		private function calcGraphicRow(arr:Array):int {
-			var _p:Number = average(arr);
-			var _tmp:Number = 0;
-			var _value:Number = 0;
+		private function calcTruelyY(obj:Object, y:Number):Number {
+			return _container_height  - _container_height * (y - obj.min) / (obj.max - obj.min);
+		}
+		
+		private function dealArray(arr:Array):Object {
+			var _len:int;
+			var _idx:uint = 0;
+			var _tmp:Array = [];
+			
+			// 把N维数组拼接成一个数组
 			for (var i:uint = 0; i < arr.length; i++) {
-				_tmp += Math.pow(_p - arr[i].delay, 2);
+				if (arr[i].length) {
+					_tmp = _tmp.concat(arr[i]);
+				}
 			}
-			_value =  (Math.sqrt(_tmp / arr.length) / _p);
+			_len = _tmp.length;
+			
+			// 数组相关信息
+			var _max:Number = _tmp[0].delay;
+			var _min:Number = _tmp[0].delay;
+			var _sum:Number = 0;
+			
+			// 数组信息的时间信息
+			var _max_time:int = _tmp[0].date.time;
+			var _min_time:int = _tmp[0].date.time;
+			
+			for (; _idx < _len; _idx++) {
+				var _t:Object = _tmp[_idx];
+				_sum += _tmp[_idx].delay;
+				
+				if (_t.delay > _max) {
+					_max = _t.delay;
+				}
+				if (_t.delay < _min) {
+					_min = _t.delay;
+				}
+				if (_t.date.time > _max_time)
+					_max_time = _t.date.time;
+				if (_t.date.time < _min_time)
+					_min_time = _t.date.time;
+			}
+			
+			// 返回的时候把最大值增加10%，最小值减少10%
+			return {
+				minTime: _min_time,
+				dltTime: (_max_time - _min_time) / 1000, // 得到相隔的秒数
+				srcData: _tmp,
+				min: _min * 0.8,
+				max: _max * 1.1,
+				avg: _sum / _len
+			};
+		}
+		
+		private function getLines(obj:Object):int {
+			// 存储标准差
+			var _tmp:Number = 0;
+			// 计算得到的相对标准差
+			var _value:Number = 0;
+			// 拼接过后的数组
+			var _arr:Array = obj.srcData;
+			var _len:int = _arr.length;
+			
+			for (var i:uint = 0; i < _len; i++) {
+				_tmp += Math.pow(obj.avg - _arr[i].delay, 2);
+			}
+			_value =  (Math.sqrt(_tmp / _len) / obj.avg);
 			
 			if (_value <= 0.2)
 				return 4;
@@ -256,5 +266,3 @@ package
 		}
 	}
 }
-
-
